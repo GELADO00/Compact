@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fernando - Aplicativos V6.1</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+   :root { --primary: #007bff; --hover: #0056b3; --bg: #f4f4f4; } 
+   body {
+       font-family: 'Segoe UI', sans-serif;
+       background: var(--bg);
+       margin: 0; padding: 0;
+       height: 100vh;
+       box-sizing: border-box;
+       display: flex;
+       flex-direction: column;
+       overflow: hidden;
+       user-select: none;
+   }
+   /* UTILS & SCREENS */
+   .hidden { display: none !important; }
+   .screen { display: none; width: 100%; height: 100%; flex-direction: column; animation: fadeIn 0.3s; overflow-y: auto; }
+   .screen.active { display: flex; }
+   #screen-organizer.active { overflow: hidden; }
+   @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+   
+   /* OVERLAYS */
+   #security-screen { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #a71d2a; color: white; flex-direction: column; align-items: center; justify-content: center; z-index: 99999; text-align: center; }
+   #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.95); z-index: 10000; flex-direction: column; align-items: center; justify-content: center; }
+   .progress-container { width: 300px; height: 10px; background: #ddd; border-radius: 5px; overflow: hidden; margin-top: 15px; }
+   .progress-bar { height: 100%; width: 0%; background: var(--primary); transition: width 0.2s; }
+   #zoom-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 10001; flex-direction: column; align-items: center; justify-content: center; }
+   #zoom-img { max-width: 95%; max-height: 90vh; border: 2px solid white; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+   .close-zoom { position: absolute; top: 20px; right: 30px; color: white; font-size: 40px; cursor: pointer; }
+   
+   /* UI ELEMENTS */
+   .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 700px; margin: 20px auto; box-sizing: border-box; text-align: center; position: relative; }
+   h2 { color: #333; margin-top: 0; }
+   p.subtitle { color: #666; font-size: 0.9rem; margin-bottom: 20px; }
+   button { padding: 10px 18px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem; }
+   button:active { transform: translateY(1px); }
+   .btn-primary { background: var(--primary); color: white; } .btn-primary:hover { background: var(--hover); }
+   .btn-back { background: transparent; color: #666; border: 1px solid #ccc; margin-bottom: 20px; align-self: flex-start; padding: 8px 15px; font-size: 0.85rem; }
+   .btn-back:hover { background: #eee; color: #333; }
+   
+   /* MENU DASHBOARD */
+   .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; width: 100%; max-width: 800px; margin: 0 auto; }
+   .menu-btn { background: white; border: 2px solid #eee; padding: 30px 20px; border-radius: 12px; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; color: #555; font-weight: bold; font-size: 1.1rem; }
+   .menu-btn:hover { border-color: var(--primary); color: var(--primary); transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,123,255,0.1); }
+   .menu-icon { font-size: 40px; margin-bottom: 10px; color: var(--primary); }
+   
+   /* ORGANIZADOR (Estilos) */
+   #org-app-container { display: flex; flex-direction: column; height: 100%; width: 100%; }
+   .org-header { padding: 10px 20px; background: white; border-bottom: 1px solid #ddd; display: flex; align-items: center; justify-content: space-between; }
+   
+   /* TOOLBAR */
+   .org-toolbar {
+       background: #f8f9fa; border-bottom: 1px solid #ddd; padding: 8px 20px;
+       display: flex; align-items: center; justify-content: flex-end; gap: 15px;
+   }
+   .org-option { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: #555; font-weight: 600; }
+   #orgContainer {
+       flex-grow: 1; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 15px;
+       align-content: flex-start; padding: 20px; background: #e9e9e9;
+       border-bottom: 1px solid #ccc; position: relative; transition: background-color 0.2s;
+   }
+   /* Feedback visual para soltar arquivos no container principal */
+   #orgContainer.dragover-container { background-color: #d0e8ff; border: 2px dashed var(--primary); }
+   
+   /* CARD COMUM (Page e File) */
+   .page-thumb, .file-thumb {
+       width: 140px; height: 230px; background: white; border: 1px solid #ddd; border-radius: 6px;
+       padding: 5px; text-align: center; cursor: pointer; position: relative;
+       display: flex; flex-direction: column; transition: transform 0.1s;
+       box-sizing: border-box;
+   }
+   .page-thumb { box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+   
+   /* ESTILO ESPECÍFICO PARA ARQUIVO (Efeito de pilha) */
+   .file-thumb {
+       border-left: 4px solid #6c757d;
+       box-shadow: 3px 3px 0 #ccc, 6px 6px 0 #eee;
+       margin-right: 6px; margin-bottom: 6px;
+   }
+   .file-thumb.selected { background-color: #e3f2fd; border: 2px solid var(--primary); }
+   .page-thumb.selected { border: 2px solid #0056b3; background-color: #e3f2fd; }
+   .img-wrapper { flex-grow: 1; display: flex; align-items: center; justify-content: center; background: #f3f3f3; overflow: hidden; margin-bottom: 5px; border: 1px solid #eee; position: relative; }
+   .page-thumb img, .file-thumb img { max-width: 100%; max-height: 100%; pointer-events: none; transition: transform 0.3s; }
+   .page-info, .file-thumb-name { font-size: 10px; color: #555; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; height: 15px; font-weight: bold; }
+   .file-count-badge {
+       background: rgba(0,0,0,0.6); color: white; padding: 2px 6px; border-radius: 4px;
+       font-size: 0.7rem; font-weight: bold; position: absolute; bottom: 5px; right: 5px;
+       z-index: 5;
+   }
+   
+   /* FERRAMENTAS DO CARD */
+   .card-tools { display: flex; justify-content: space-between; background: #f8f9fa; padding: 4px; border-radius: 4px; margin-top: auto; border-top: 1px solid #eee; width: 100%; box-sizing: border-box; }
+   .tool-btn { background: none; border: none; cursor: pointer; color: #555; padding: 2px; border-radius: 3px; display: flex; align-items: center; justify-content: center; }
+   .tool-btn:hover { background: #e2e6ea; color: #007bff; }
+   .page-thumb.selected .select-badge, .file-thumb.selected .select-badge { display: block; }
+   .select-badge { position: absolute; top: -8px; left: -8px; background: #0056b3; color: white; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; line-height: 22px; display: none; z-index: 10; font-weight: bold; }
+   .btn-delete-card { position: absolute; top: -8px; right: -8px; background: #ff4444; color: white; border: none; width: 22px; height: 22px; border-radius: 50%; cursor: pointer; font-weight: bold; line-height: 20px; padding: 0; display: none; z-index: 10; }
+   .page-thumb:hover .btn-delete-card, .page-thumb.selected .btn-delete-card,
+   .file-thumb:hover .btn-delete-card, .file-thumb.selected .btn-delete-card { display: block; }
+   
+   /* Dragging - Nova Lógica de Estilo */
+   .page-thumb.dragging, .file-thumb.dragging { opacity: 0.5; transform: scale(0.95); }
+   .page-thumb.drag-left::before, .file-thumb.drag-left::before {
+       content: ''; position: absolute; left: -10px; top: 0; bottom: 0; width: 5px; background: #007bff; border-radius: 4px; z-index: 100;
+   }
+   .page-thumb.drag-right::after, .file-thumb.drag-right::after {
+       content: ''; position: absolute; right: -10px; top: 0; bottom: 0; width: 5px; background: #007bff; border-radius: 4px; z-index: 100;
+   }
+
+   .bottom-panel { flex-shrink: 0; background: white; padding: 15px 20px; box-shadow: 0 -4px 10px rgba(0,0,0,0.05); z-index: 100; }
+   .upload-zone { background: #fafafa; padding: 10px; border: 2px dashed #ccc; border-radius: 8px; text-align: center; cursor: pointer; margin-bottom: 10px; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px; }
+   .upload-zone:hover, .upload-zone.dragover { border-color: #007bff; background: #f0f8ff; }
+   .filename-container { display: flex; justify-content: center; margin-bottom: 15px; }
+   .filename-input { padding: 10px; font-size: 1rem; border: 1px solid #ccc; border-radius: 6px; width: 100%; max-width: 400px; text-align: center; background: #f9f9f9; }
+   .filename-input:focus { border-color: #007bff; outline: none; background: #fff; }
+   .controls-bar { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+   button.primary { background-color: #007bff; color: white; } button.primary:hover { background-color: #0056b3; }
+   button.secondary { background-color: #6c757d; color: white; } button.secondary:hover { background-color: #545b62; }
+   button.danger { background-color: #dc3545; color: white; } button.danger:hover { background-color: #bd2130; }
+   button.warning { background-color: #ffc107; color: #333; } button.warning:hover { background-color: #d39e00; }
+   
+   /* SWITCH */
+   .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+   .switch input { opacity: 0; width: 0; height: 0; }
+   .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+   .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+   input:checked + .slider { background-color: var(--primary); }
+   input:checked + .slider:before { transform: translateX(18px); }
+   
+   /* CONVERSOR */
+   .input-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; text-align: left; }
+   input[type="text"] { width: 100%; padding: 12px; font-size: 1.1rem; border: 2px solid #ddd; border-radius: 8px; box-sizing: border-box; outline: none; }
+   input[type="text"]:focus { border-color: var(--primary); }
+   .toggle-container { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px; background: #f8f9fa; padding: 8px 15px; border-radius: 50px; border: 1px solid #eee; width: fit-content; margin: 20px auto; }
+   .toggle-label { font-size: 0.9rem; font-weight: 600; color: #555; cursor: pointer; }
+   .result-box { background: #eef2f5; padding: 15px; border-radius: 8px; border: 1px solid #dde2e5; min-height: 50px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: #333; margin-bottom: 20px; text-transform: lowercase; line-height: 1.4; font-weight: 500; }
+   .result-box::first-letter { text-transform: lowercase; }
+   .result-box.empty { color: #999; font-style: italic; text-transform: none; font-weight: normal; }
+   .footer-info { margin-top: 30px; font-size: 0.8rem; color: #ccc; }
+</style>
+</head>
+<body>
+<div id="security-screen">
+<h1 style="font-size: 4rem;">🚫</h1>
+<h2 id="sec-title">ACESSO NEGADO</h2>
+<p id="sec-msg">Usuário não autorizado.</p>
+<p style="font-size: 0.8rem; opacity: 0.7; margin-top:20px;">ID: <span id="detected-id">...</span></p>
+</div>
+<div id="loading-overlay">
+<h3 id="loading-title">Processando...</h3>
+<div class="progress-container"><div class="progress-bar" id="global-progress"></div></div>
+<div id="loading-text">0%</div>
+</div>
+<div id="zoom-modal" onclick="closeZoom()"><span class="close-zoom">&times;</span><img id="zoom-img" src="" alt="Zoom"></div>
+
+<div id="screen-dashboard" class="screen active" style="overflow-y: auto;">
+<div style="text-align:center; margin-top:50px; padding-bottom: 50px;">
+<h2 style="font-size: 2rem; margin-bottom: 40px;">Fernando - Aplicativos</h2>
+<div class="menu-grid">
+<div class="menu-btn" onclick="navTo('organizer')">
+<span class="material-icons menu-icon">dashboard</span>
+               Organizador PDF
+<div style="font-size: 0.8rem; font-weight: normal; margin-top: 5px; color:#999;">Juntar, Girar, Extrair</div>
+</div>
+<div class="menu-btn" onclick="navTo('converter')">
+<span class="material-icons menu-icon">spellcheck</span>
+               Conversor Numérico
+<div style="font-size: 0.8rem; font-weight: normal; margin-top: 5px; color:#999;">Valor por Extenso</div>
+</div>
+</div>
+<div class="footer-info">Usuário: <span id="footer-user">...</span> | V6.1 (Correção Assinatura)</div>
+</div>
+</div>
+
+<div id="screen-organizer" class="screen">
+<div id="org-app-container">
+<div class="org-header">
+<div style="display:flex; align-items:center;">
+<button class="btn-back" onclick="navTo('dashboard')" style="margin:0;">← Menu</button>
+<h2 style="margin: 0 0 0 20px; font-size: 1.2rem;">Organizador PDF</h2>
+</div>
+</div>
+<div class="org-toolbar">
+<div class="org-option">
+<span title="Alterna entre ver páginas soltas ou arquivos agrupados">Visualizar: Páginas Soltas | Arquivos Inteiros</span>
+<label class="switch">
+<input type="checkbox" id="orgFileModeCheck" onchange="toggleOrgFileMode()">
+<span class="slider"></span>
+</label>
+</div>
+</div>
+<div id="orgContainer">
+<div style="width:100%; text-align:center; color:#999; margin-top:50px; display:flex; flex-direction:column; align-items:center;">
+<span class="material-icons" style="font-size: 48px; color:#ddd;">grid_view</span><br>Arraste os arquivos aqui
+</div>
+</div>
+<div class="bottom-panel">
+<div class="upload-zone" id="orgDrop" onclick="document.getElementById('orgFile').click()">
+<span class="material-icons">upload_file</span>
+<h3 style="margin:0; font-size: 1rem;">Clique ou Arraste arquivos aqui</h3>
+</div>
+<input type="file" id="orgFile" accept="application/pdf" multiple style="display:none">
+<div class="filename-container">
+<input type="text" id="orgFileName" class="filename-input" placeholder="Nome do arquivo (Opcional) - Ex: Relatorio">
+</div>
+<div class="controls-bar">
+<button class="primary" onclick="orgDownload('all')"><span class="material-icons">save</span> Baixar Completo</button>
+<button class="secondary" onclick="orgDownload('selected')"><span class="material-icons">filter_none</span> Baixar Selecionados</button>
+<button class="warning" onclick="orgRemoveSelected()"><span class="material-icons">delete_sweep</span> Excluir Seleção</button>
+<button class="danger" onclick="orgClear()"><span class="material-icons">close</span> Limpar</button>
+</div>
+</div>
+</div>
+</div>
+
+<div id="screen-converter" class="screen" style="overflow-y: auto;">
+<div class="card">
+<button class="btn-back" onclick="navTo('dashboard')">← Menu</button>
+<h2>Conversor Extenso</h2>
+<p class="subtitle">Padrão Cheque (Sem vírgulas, de reais)</p>
+<div class="input-group">
+<label>Valor:</label>
+<input type="text" id="convInput" placeholder="Ex: 15.000.542,00">
+</div>
+<div class="toggle-container">
+<span class="toggle-label" onclick="convToggle()">Numérico</span>
+<label class="switch">
+<input type="checkbox" id="convMode" checked onchange="convUpdate()">
+<span class="slider"></span>
+</label>
+<span class="toggle-label" onclick="convToggle()">Monetário</span>
+</div>
+<div class="result-box empty" id="convResult">O resultado aparecerá aqui...</div>
+<button class="btn-primary" style="width:100%;" onclick="convCopy()">
+<span class="material-icons">content_copy</span> Copiar
+</button>
+</div>
+</div>
+
+<script>
+// ==========================================
+// 1. GERAL
+// ==========================================
+if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+}
+(function init() {
+   const screen = document.getElementById('security-screen');
+   const displayId = document.getElementById('detected-id');
+   const footerUser = document.getElementById('footer-user');
+   const EXPIRATION = new Date(2026, 12, 1); // Atualizado para 01/11/2027
+   const NOW = new Date();
+
+   if (NOW >= EXPIRATION) {
+       localStorage.setItem('FERNANDO_APP_STATUS', 'DEAD');
+       displayId.textContent = "EXPIRADO";
+       screen.querySelector('h2').textContent = "DESATUALIZADO";
+       screen.style.display = 'flex'; return;
+   } else {
+       localStorage.removeItem('FERNANDO_APP_STATUS');
+   }
+
+   const hashes = ['QzAyMDYxMQ==', 'QzAyMzg1MA==', 'QzAyMTIxOQ==', 'QzAyMTU5NQ==', 'QzAyODI3MQ==', 'QzAyNTM0OQ==', 'QzAyODI2OQ==', 'QzAyMTY1MQ==', 'QzAyMzEwNg==', 'QzAyMzAzNA==', 'QzAyNTYxMA==', 'QzAyNzQ5Nw==', 'QzAyNjQxMQ==', 'QzAxNzc0Nw==', 'QzAyMTY4OQ==', 'QzAyNzY5MA==', 'QzAyNjE4NQ==', 'QzAyMzYxNw==', 'QzAwOTIxNQ==', 'QzAyNjQzNw==', 'QzAxODA1MA==', 'QzAyNzI4Ng==', 'QzAyMTYwNw==', 'QzAyMDk4NA==', 'QzAxNzY2NA==', 'QzAyMjk5Ng==', 'QzAwNjEzNA==', 'QzAyMzE5Ng==', 'QzAyNTM4MQ==', 'QzAyNTY3NA==', 'QzAxNzY3Ng==','QzAyNTYxMQ==', 'QzAyMTY1Mg==', 'QzAyNTYwNg==', 'QzAyMDYxMA==', 'QzAyNjY4NQ==', 'QzAxNjg1MQ==', 'QzAyMjk5Nw==', 'QzAyMTU5Mg==', 'QzAxOTE2Mg==', 'QzAyNjQxMQ==', 'QzAyMzgyNQ=='];
+   const path = window.location.href;
+   const match = path.match(/Users\/(C\d{6})/i);
+   if (match && match[1]) {
+       const user = match[1].toUpperCase();
+       displayId.textContent = user;
+       footerUser.textContent = user;
+       if (hashes.includes(btoa(user))) { /* OK */ }
+       else { screen.style.display = 'flex'; document.body.innerHTML = ''; document.body.appendChild(screen); }
+   } else {
+       footerUser.textContent = "Modo Teste";
+   }
+})();
+function navTo(id) {
+   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+   document.getElementById(`screen-${id}`).classList.add('active');
+}
+
+// ==========================================
+// 2. ORGANIZADOR LOGIC
+// ==========================================
+let orgPages = [];
+let orgBuffers = {};
+let orgSel = new Set();
+let orgLastSel = null;
+let orgDragging = false;
+let orgDropSide = null;
+let orgFileMode = false;
+let orgActiveTarget = null;
+
+const orgContainer = document.getElementById('orgContainer');
+const orgFile = document.getElementById('orgFile');
+const orgDropZone = document.getElementById('orgDrop');
+const loading = document.getElementById('loading-overlay');
+const loadText = document.getElementById('loading-text');
+const loadBar = document.getElementById('global-progress');
+const zoomModal = document.getElementById("zoom-modal");
+const zoomImg = document.getElementById("zoom-img");
+
+// --- Lógica de Troca de Modo ---
+function toggleOrgFileMode() {
+   const checkbox = document.getElementById('orgFileModeCheck');
+   const isNowFileMode = checkbox.checked;
+   if (isNowFileMode && orgPages.length > 1) {
+       if (checkIfMixed()) {
+           const confirmReset = confirm("ATENÇÃO: As páginas foram reorganizadas/misturadas.\n\nPara visualizar em 'Modo Arquivo Inteiro', o sistema precisará desfazer a mistura e reagrupar as páginas de cada arquivo original.\n\nDeseja continuar e reagrupar?");
+           if (confirmReset) {
+               orgPages.sort((a, b) => {
+                   if (a.fileId === b.fileId) return a.originalIndex - b.originalIndex;
+                   return a.fileId.localeCompare(b.fileId);
+               });
+               orgFileMode = true;
+           } else {
+               checkbox.checked = false;
+               return;
+           }
+       } else {
+           orgFileMode = true;
+       }
+   } else {
+       orgFileMode = isNowFileMode;
+   }
+   orgSel.clear();
+   orgRender();
+}
+function checkIfMixed() {
+   const seen = new Set();
+   let currentId = null;
+   for (const p of orgPages) {
+       if (p.fileId !== currentId) {
+           if (seen.has(p.fileId)) return true;
+           seen.add(currentId);
+           currentId = p.fileId;
+       }
+   }
+   return false;
+}
+
+document.addEventListener('keydown', (e) => {
+   const isOrgScreen = document.getElementById('screen-organizer').classList.contains('active');
+   const isTyping = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
+   if(isOrgScreen && e.key === 'Delete' && orgSel.size > 0 && !isTyping) {
+       orgRemoveSelected();
+   }
+});
+
+// Eventos da Zona Inferior (Drop Zone original)
+orgDropZone.addEventListener('dragover', (e) => { e.preventDefault(); orgDropZone.classList.add('dragover'); });
+orgDropZone.addEventListener('dragleave', () => orgDropZone.classList.remove('dragover'));
+orgDropZone.addEventListener('drop', (e) => {
+   e.preventDefault(); orgDropZone.classList.remove('dragover');
+   if (e.dataTransfer.files.length) orgHandleFiles(e.dataTransfer.files);
+});
+orgFile.addEventListener("change", (e) => orgHandleFiles(e.target.files));
+
+async function orgHandleFiles(filesList) {
+   const files = Array.from(filesList);
+   if(!files.length) return;
+   loading.style.display = "flex";
+   if(orgPages.length === 0) orgContainer.innerHTML = "";
+   try {
+       for (const file of files) {
+           if(file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) continue;
+           const arrayBuffer = await file.arrayBuffer();
+           const fileId = file.name + "_" + Date.now() + "_" + Math.random();
+           orgBuffers[fileId] = arrayBuffer;
+           const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+           for (let i = 0; i < pdf.numPages; i++) {
+               const page = await pdf.getPage(i + 1);
+               const viewport = page.getViewport({ scale: 0.15 });
+               const canvas = document.createElement("canvas");
+               canvas.width = viewport.width; canvas.height = viewport.height;
+               const ctx = canvas.getContext("2d");
+               await page.render({ canvasContext: ctx, viewport }).promise;
+               orgPages.push({
+                   fileId: fileId,
+                   originalIndex: i,
+                   fileName: file.name,
+                   preview: canvas.toDataURL("image/jpeg", 0.6),
+                   rotation: 0
+               });
+               const percent = Math.round(((i + 1) / pdf.numPages) * 100);
+               loadText.textContent = `Lendo ${file.name}: ${percent}%`;
+               loadBar.style.width = `${percent}%`;
+               canvas.width = 1; canvas.height = 1;
+           }
+       }
+   } catch (err) { alert("Erro ao ler arquivos: " + err.message); }
+   finally { loading.style.display = "none"; orgRender(); orgFile.value = ""; }
+}
+
+function orgRender() {
+   orgContainer.innerHTML = "";
+   if(orgPages.length === 0) {
+       orgContainer.innerHTML = `<div style="width:100%; text-align:center; color:#999; margin-top:50px; display:flex; flex-direction:column; align-items:center;"><span class="material-icons" style="font-size: 48px; color:#ddd;">grid_view</span><br>Arraste os arquivos aqui</div>`;
+       return;
+   }
+   if (orgFileMode) { renderFilesMode(); } else { renderPagesMode(); }
+}
+
+function renderPagesMode() {
+   const fragment = document.createDocumentFragment();
+   orgPages.forEach((page, index) => {
+       const div = document.createElement("div");
+       div.className = "page-thumb";
+       if (orgSel.has(index)) div.classList.add("selected");
+       div.setAttribute("draggable", true);
+       div.dataset.index = index;
+       div.innerHTML = `
+<div class="select-badge">✓</div>
+<button class="btn-delete-card" onclick="orgRemSingle(${index}, event)">×</button>
+<div style="font-weight:bold; color:#ccc; font-size:0.7em; margin-bottom:2px;">${index + 1}</div>
+<div class="img-wrapper"><img src="${page.preview}" style="transform: rotate(${page.rotation}deg);"></div>
+<div class="card-tools">
+<button class="tool-btn" onclick="orgRot(${index}, -90, event)" title="Esq."><span class="material-icons" style="font-size:16px">rotate_left</span></button>
+<button class="tool-btn zoom" onclick="orgZoom(${index}, event)" title="Zoom"><span class="material-icons" style="font-size:18px">zoom_in</span></button>
+<button class="tool-btn" onclick="orgRot(${index}, 90, event)" title="Dir."><span class="material-icons" style="font-size:16px">rotate_right</span></button>
+</div>
+<div class="page-info">${page.fileName}</div>
+       `;
+       div.onclick = (e) => orgToggle(index, e);
+       div.addEventListener("dragstart", orgDragStart);
+       div.addEventListener("dragend", orgDragEnd);
+       fragment.appendChild(div);
+   });
+   orgContainer.appendChild(fragment);
+}
+
+function renderFilesMode() {
+   const filesMap = new Map();
+   orgPages.forEach((p, idx) => {
+       if (!filesMap.has(p.fileId)) {
+           filesMap.set(p.fileId, { fileId: p.fileId, name: p.fileName, count: 0, indices: [] });
+       }
+       const f = filesMap.get(p.fileId);
+       f.count++; f.indices.push(idx);
+   });
+   const fileGroups = Array.from(filesMap.values());
+   const fragment = document.createDocumentFragment();
+   fileGroups.forEach((group, groupIndex) => {
+       const firstPage = orgPages[group.indices[0]];
+       const div = document.createElement("div");
+       div.className = "file-thumb";
+       if (orgSel.has(groupIndex)) div.classList.add("selected");
+       div.setAttribute("draggable", true);
+       div.dataset.groupIndex = groupIndex;
+       div.innerHTML = `
+<div class="select-badge">✓</div>
+<button class="btn-delete-card" onclick="orgRemGroup(${groupIndex}, event)">×</button>
+<div class="img-wrapper">
+<img src="${firstPage.preview}">
+<div class="file-count-badge">${group.count} Pg</div>
+</div>
+<div class="file-thumb-name">${group.name}</div>
+       `;
+       div.onclick = (e) => orgToggleGroup(groupIndex, e, group.indices);
+       div.addEventListener("dragstart", orgDragStartGroup);
+       div.addEventListener("dragend", orgDragEnd);
+       fragment.appendChild(div);
+   });
+   orgContainer.appendChild(fragment);
+}
+
+// --- Nova Lógica Unificada de Drag & Drop no Container ---
+
+orgContainer.addEventListener('dragover', (e) => {
+   e.preventDefault(); 
+   
+   // Se NÃO estivermos arrastando algo de dentro do app, verifica se é um arquivo de fora
+   if (!orgDragging) {
+       if (e.dataTransfer.types && e.dataTransfer.types.includes("Files")) {
+           orgContainer.classList.add('dragover-container');
+       }
+       return;
+   }
+
+   // Lógica de arrastar interno
+   const scrollZone = 100; const scrollSpeed = 15;
+   const rect = orgContainer.getBoundingClientRect();
+   if (e.clientY < rect.top + scrollZone) orgContainer.scrollTop -= scrollSpeed;
+   else if (e.clientY > rect.bottom - scrollZone) orgContainer.scrollTop += scrollSpeed;
+   
+   const target = e.target.closest(orgFileMode ? '.file-thumb' : '.page-thumb');
+   if (target) {
+       const idxKey = orgFileMode ? 'groupIndex' : 'index';
+       const tIdx = parseInt(target.dataset[idxKey]);
+       if (orgSel.has(tIdx)) return;
+       
+       orgActiveTarget = target;
+       
+       const tRect = target.getBoundingClientRect();
+       const midPoint = tRect.left + tRect.width / 2;
+       const selector = orgFileMode ? '.file-thumb' : '.page-thumb';
+       document.querySelectorAll(selector).forEach(el => el.classList.remove("drag-left", "drag-right"));
+       
+       if (e.clientX < midPoint) { target.classList.add("drag-left"); orgDropSide = 'before'; }
+       else { target.classList.add("drag-right"); orgDropSide = 'after'; }
+   }
+});
+
+orgContainer.addEventListener('dragleave', (e) => {
+   if (!orgDragging) {
+       orgContainer.classList.remove('dragover-container');
+   }
+   if(e.relatedTarget === null || !orgContainer.contains(e.relatedTarget)) {
+       const selector = orgFileMode ? '.file-thumb' : '.page-thumb';
+       document.querySelectorAll(selector).forEach(el => el.classList.remove("drag-left", "drag-right"));
+       orgActiveTarget = null;
+   }
+});
+
+orgContainer.addEventListener('drop', (e) => {
+   e.preventDefault(); e.stopPropagation();
+   orgContainer.classList.remove('dragover-container');
+
+   // Se o arquivo veio de fora do computador, faz o upload e ignora o resto
+   if (!orgDragging) {
+       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+           orgHandleFiles(e.dataTransfer.files);
+       }
+       return;
+   }
+
+   // Se chegou até aqui, é um drop de reorganização interna
+   const target = e.target.closest(orgFileMode ? '.file-thumb' : '.page-thumb') || orgActiveTarget;
+   if (!target) return;
+
+   if (orgFileMode) {
+       const targetGIdx = parseInt(target.dataset.groupIndex);
+       if (isNaN(targetGIdx) || orgSel.has(targetGIdx)) return;
+       const filesMap = new Map();
+       orgPages.forEach((p) => {
+           if(!filesMap.has(p.fileId)) filesMap.set(p.fileId, []);
+           filesMap.get(p.fileId).push(p);
+       });
+       const groupsArray = Array.from(filesMap.values());
+       const selectedGroupsIdx = Array.from(orgSel).sort((a,b)=>a-b);
+       const groupsToMove = selectedGroupsIdx.map(i => groupsArray[i]);
+       let remainingGroups = groupsArray.filter((_, i) => !orgSel.has(i));
+       const targetGroupObj = groupsArray[targetGIdx];
+       let insertPos = remainingGroups.indexOf(targetGroupObj);
+       if (orgDropSide === 'after') insertPos++;
+       if (insertPos === -1) insertPos = remainingGroups.length;
+       remainingGroups.splice(insertPos, 0, ...groupsToMove);
+       orgPages = remainingGroups.flat();
+       orgSel.clear();
+       for(let i=0; i<groupsToMove.length; i++) orgSel.add(insertPos + i);
+       orgRender();
+   } else {
+       const targetIndex = parseInt(target.dataset.index);
+       if (isNaN(targetIndex) || orgSel.has(targetIndex)) return;
+       const indicesToMove = Array.from(orgSel).sort((a, b) => a - b);
+       const itemsToMove = indicesToMove.map(i => orgPages[i]);
+       let newData = orgPages.filter((_, i) => !orgSel.has(i));
+       const targetItem = orgPages[targetIndex];
+       let insertIdx = newData.indexOf(targetItem);
+       if (orgDropSide === 'after') insertIdx++;
+       if (insertIdx === -1) insertIdx = newData.length;
+       newData.splice(insertIdx, 0, ...itemsToMove);
+       orgPages = newData;
+       orgSel.clear();
+       for(let i=0; i<itemsToMove.length; i++) orgSel.add(insertIdx + i);
+       orgRender();
+   }
+   orgActiveTarget = null;
+});
+
+function orgDragStart(e) {
+   orgDragging = true;
+   const idx = parseInt(this.dataset.index);
+   if (!orgSel.has(idx)) { orgSel.clear(); orgSel.add(idx); orgLastSel = idx; orgRender(); }
+   setTimeout(() => this.classList.add("dragging"), 0);
+}
+
+function orgDragStartGroup(e) {
+   orgDragging = true;
+   const gIdx = parseInt(this.dataset.groupIndex);
+   if (!orgSel.has(gIdx)) { orgSel.clear(); orgSel.add(gIdx); orgRender(); }
+   setTimeout(() => this.classList.add("dragging"), 0);
+}
+
+function orgDragEnd(e) {
+   orgDragging = false; 
+   this.classList.remove("dragging");
+   const selector = orgFileMode ? '.file-thumb' : '.page-thumb';
+   document.querySelectorAll(selector).forEach(el => el.classList.remove("drag-left", "drag-right"));
+   orgActiveTarget = null;
+}
+
+// --- Fim da Nova Lógica Unificada ---
+
+function orgRot(index, angle, event) { event.stopPropagation(); const page = orgPages[index]; page.rotation = (page.rotation + angle) % 360; if (page.rotation < 0) page.rotation += 360; orgRender(); }
+async function orgZoom(index, event) {
+   event.stopPropagation();
+   const page = orgPages[index];
+   if(!page || !orgBuffers[page.fileId]) return alert("Erro no arquivo.");
+   zoomImg.src = ""; zoomModal.style.display = "flex";
+   try {
+       const pdf = await pdfjsLib.getDocument({ data: orgBuffers[page.fileId] }).promise;
+       const pdfPage = await pdf.getPage(page.originalIndex + 1);
+       const viewport = pdfPage.getViewport({ scale: 1.5, rotation: page.rotation });
+       const canvas = document.createElement("canvas");
+       canvas.width = viewport.width; canvas.height = viewport.height;
+       await pdfPage.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+       zoomImg.src = canvas.toDataURL("image/jpeg", 0.8);
+   } catch(e) { closeZoom(); }
+}
+function closeZoom() { zoomModal.style.display = "none"; zoomImg.src = ""; }
+function orgToggle(index, event) {
+   if (event.shiftKey && orgLastSel !== null) {
+       const start = Math.min(orgLastSel, index); const end = Math.max(orgLastSel, index);
+       for (let i = start; i <= end; i++) orgSel.add(i);
+       orgRender();
+   } else if (event.ctrlKey || event.metaKey) {
+       if (orgSel.has(index)) orgSel.delete(index); else orgSel.add(index);
+       orgLastSel = index;
+       orgRender();
+   } else { 
+       if(!orgDragging) { orgSel.clear(); orgSel.add(index); orgLastSel = index; orgRender(); }
+   }
+}
+function orgToggleGroup(gIdx, event, indices) {
+   if (event.ctrlKey || event.metaKey) {
+       if (orgSel.has(gIdx)) orgSel.delete(gIdx); else orgSel.add(gIdx);
+   } else { 
+       if(!orgDragging) { orgSel.clear(); orgSel.add(gIdx); }
+   }
+   orgRender();
+}
+function orgRemSingle(index, event) { event.stopPropagation(); orgPages.splice(index, 1); orgSel.clear(); orgRender(); }
+function orgRemGroup(gIdx, event) {
+   event.stopPropagation();
+   const filesMap = new Map();
+   orgPages.forEach(p => { if(!filesMap.has(p.fileId)) filesMap.set(p.fileId, []); filesMap.get(p.fileId).push(p); });
+   const groupsArray = Array.from(filesMap.values());
+   const groupToRemove = groupsArray[gIdx];
+   orgPages = orgPages.filter(p => p.fileId !== groupToRemove[0].fileId);
+   orgSel.clear();
+   orgRender();
+}
+function orgRemoveSelected() {
+   if (!orgSel.size) return;
+   if (orgFileMode) {
+       const filesMap = new Map();
+       orgPages.forEach(p => { if(!filesMap.has(p.fileId)) filesMap.set(p.fileId, []); filesMap.get(p.fileId).push(p); });
+       const groupsArray = Array.from(filesMap.values());
+       const groupsToRemove = [];
+       orgSel.forEach(gIdx => groupsToRemove.push(groupsArray[gIdx][0].fileId));
+       orgPages = orgPages.filter(p => !groupsToRemove.includes(p.fileId));
+   } else {
+       orgPages = orgPages.filter((_, i) => !orgSel.has(i));
+   }
+   orgSel.clear(); orgRender();
+}
+function orgClear() { if(confirm("Limpar tudo?")) { orgPages = []; orgBuffers = {}; orgSel.clear(); orgRender(); } }
+async function orgDownload(mode) {
+   const { degrees } = PDFLib;
+   let dataToSave = [];
+   if (orgFileMode) {
+       const filesMap = new Map();
+       orgPages.forEach(p => { if(!filesMap.has(p.fileId)) filesMap.set(p.fileId, []); filesMap.get(p.fileId).push(p); });
+       const groupsArray = Array.from(filesMap.values());
+       if (mode === 'selected') {
+           if (orgSel.size === 0) return alert("Selecione.");
+           groupsArray.forEach((grp, idx) => { if (orgSel.has(idx)) dataToSave.push(...grp); });
+       } else { if (!orgPages.length) return alert("Vazio."); dataToSave = orgPages; }
+   } else {
+       if (mode === 'selected') {
+           if (orgSel.size === 0) return alert("Selecione páginas.");
+           orgPages.forEach((page, idx) => { if (orgSel.has(idx)) dataToSave.push(page); });
+       } else { if (orgPages.length === 0) return alert("Vazio!"); dataToSave = orgPages; }
+   }
+   let customName = document.getElementById('orgFileName').value.trim();
+   if (!customName) customName = "FERNANDO_PDF";
+   if (!customName.toLowerCase().endsWith('.pdf')) customName += ".pdf";
+   loading.style.display = "flex"; loadText.textContent = "Gerando PDF..."; loadBar.style.width = "100%";
+   try {
+       const merged = await PDFLib.PDFDocument.create();
+       const pdfCache = {};
+       for (const page of dataToSave) {
+           const buffer = orgBuffers[page.fileId]; if (!buffer) continue;
+           if (!pdfCache[page.fileId]) {
+               const srcDoc = await PDFLib.PDFDocument.load(buffer);
+               try { const form = srcDoc.getForm(); form.flatten(); } catch(e) {}
+               pdfCache[page.fileId] = srcDoc;
+           }
+           const sourcePdf = pdfCache[page.fileId];
+           const [copiedPage] = await merged.copyPages(sourcePdf, [page.originalIndex]);
+           const currentRotation = copiedPage.getRotation().angle;
+           let finalRotation = (currentRotation + page.rotation) % 360;
+           if (finalRotation < 0) finalRotation += 360;
+           copiedPage.setRotation(degrees(finalRotation));
+           merged.addPage(copiedPage);
+       }
+       const pdfBytes = await merged.save();
+       const blob = new Blob([pdfBytes], { type: "application/pdf" });
+       const link = document.createElement("a");
+       link.href = URL.createObjectURL(blob);
+       link.download = customName;
+       document.body.appendChild(link); link.click(); link.remove();
+   } catch (e) { alert("Erro: " + e.message); } finally { loading.style.display = "none"; }
+}
+
+// ==========================================
+// 3. CONVERSOR LOGIC
+// ==========================================
+const vIn = document.getElementById('convInput');
+const vRes = document.getElementById('convResult');
+const vMode = document.getElementById('convMode');
+if(vIn) vIn.addEventListener('input', vUpd);
+function convToggle() { vMode.checked=!vMode.checked; vUpd(); }
+function vUpd() {
+   let raw = vIn.value.replace(/\./g,'').replace(',','.');
+   const val = parseFloat(raw);
+   if(isNaN(val)) { vRes.textContent="..."; vRes.classList.add('empty'); return; }
+   vRes.textContent = extenso(val, vMode.checked);
+   vRes.classList.remove('empty');
+}
+function convCopy() {
+   if(vRes.classList.contains('empty')) return;
+   navigator.clipboard.writeText(vRes.textContent);
+   const b = document.querySelector('#screen-converter .btn-primary');
+   const old = b.innerHTML; b.innerHTML='Copiado!'; setTimeout(()=>b.innerHTML=old, 2000);
+}
+function extenso(v, isMon) {
+   if(v===0) return isMon?"zero reais":"zero";
+   const und=['','um','dois','três','quatro','cinco','seis','sete','oito','nove'];
+   const dez=['','dez','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
+   const esp=['dez','onze','doze','treze','quatorze','quinze','dezesseis','dezessete','dezoito','dezenove'];
+   const cen=['','cento','duzentos','trezentos','quatrocentos','quinhentos','seiscentos','setecentos','oitocentos','novecentos'];
+   const mil=['','mil','milhão','bilhão','trilhão']; const milP=['','mil','milhões','bilhões','trilhões'];
+   function get(n) {
+       if(n===0)return ''; if(n===100)return 'cem';
+       let u=n%10, d=Math.floor((n%100)/10), c=Math.floor(n/100), s='';
+       if(c>0) s+=cen[c];
+       if(d===1) { if(s)s+=' e '; s+=esp[u]; return s; }
+       if(d>1) { if(s)s+=' e '; s+=dez[d]; }
+       if(u>0) { if(s)s+=' e '; s+=und[u]; }
+       return s;
+   }
+   let int = Math.floor(v); let cent = Math.round((v-int)*100); if(cent===100){ int++; cent=0; } let txt = '';
+   if(int>0) {
+       let grp=[], t=int;
+       while(t>0) { grp.push(t%1000); t=Math.floor(t/1000); }
+       for(let i=grp.length-1; i>=0; i--) {
+           let n = grp[i];
+           if(n>0) {
+               if(txt!=='') { if(n<100 || n%100===0) txt+=' e '; else txt+=' '; }
+               let ext = get(n); if(i===1 && n===1) ext=''; txt += ext;
+               if(i>0) { if(ext!=='') txt+=' '; txt+=(n>1?milP[i]:mil[i]); }
+           }
+       }
+       if(isMon) {
+           const tr = txt.trim();
+           if(tr.endsWith('milhão')||tr.endsWith('milhões')||tr.endsWith('bilhão')||tr.endsWith('bilhões')||tr.endsWith('trilhão')||tr.endsWith('trilhões')) txt+=' de';
+           txt += (int===1)?' real':' reais';
+       }
+   }
+   if(cent>0) {
+       if(isMon) { if(txt) txt+=' e '; else if(!int) txt=''; txt+=get(cent); txt+=(cent===1)?' centavo':' centavos'; }
+       else { if(txt) txt+=' vírgula '; else txt+='zero vírgula '; if(cent<10 && (v.toFixed(2).split('.')[1].startsWith('0'))) txt+='zero '+get(cent); else txt+=get(cent); }
+   }
+   return txt;
+}
+</script>
+</body>
+</html>
